@@ -959,12 +959,15 @@
   <div id="booth-modal" class="fixed inset-0 z-50 hidden bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4">
     <div class="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden">
       <div class="p-5 sm:p-6 border-b border-slate-100 flex items-start justify-between gap-4 bg-slate-50">
-        <div>
+        <div class="min-w-0">
+          <button type="button" id="modal-back-to-favorites" onclick="closeBoothModal()" class="hidden mb-3 px-3 py-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 hover:bg-amber-100 text-xs sm:text-sm font-bold">
+            ← 찜목록으로 돌아가기
+          </button>
           <div id="modal-badges" class="flex flex-wrap items-center gap-1.5 mb-2"></div>
           <h3 id="modal-title" class="text-xl sm:text-2xl font-black text-slate-900 leading-snug"></h3>
           <p id="modal-org" class="text-xs sm:text-sm font-semibold text-slate-600 mt-1"></p>
         </div>
-        <button type="button" onclick="closeBoothModal()" class="w-9 h-9 rounded-full bg-white border border-slate-200 hover:bg-slate-100 flex items-center justify-center text-slate-600 font-bold shrink-0">
+        <button type="button" id="modal-close-btn" onclick="closeBoothModal()" aria-label="상세 내용 닫기" class="w-9 h-9 rounded-full bg-white border border-slate-200 hover:bg-slate-100 flex items-center justify-center text-slate-600 font-bold shrink-0">
           ✕
         </button>
       </div>
@@ -1025,7 +1028,7 @@
         </button>
       </div>
 
-      <div class="p-5 sm:p-6 overflow-y-auto space-y-4 custom-scrollbar">
+      <div id="stamp-modal-content" class="p-5 sm:p-6 overflow-y-auto space-y-4 custom-scrollbar">
         <div class="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-xs sm:text-sm text-amber-950 space-y-1.5">
           <div class="font-extrabold flex items-center justify-between">
             <span>🎯 목표: 부스 3개 이상 체험 &amp; 확인 도장 받기!</span>
@@ -1352,10 +1355,15 @@ function toggleFavorite(boothId) {
   renderStampModalList();
 }
 
-function openBoothModal(boothId) {
+let favoriteDetailReturnState = null;
+
+function openBoothModal(boothId, returnState = null) {
   const booth = BOOTHS.find(b => b.id === boothId);
   if (!booth) return;
   activeModalBoothId = boothId;
+  favoriteDetailReturnState = returnState;
+  document.getElementById('modal-back-to-favorites').classList.toggle('hidden', !returnState);
+  document.getElementById('modal-close-btn').setAttribute('aria-label', returnState ? '찜목록으로 돌아가기' : '상세 내용 닫기');
 
   const badgeCls = getCategoryBadgeClass(booth.category);
   document.getElementById('modal-badges').innerHTML = `
@@ -1407,12 +1415,20 @@ function toggleFavoriteFromModal() {
   toggleFavorite(activeModalBoothId);
 }
 
-function closeBoothModal() {
+function closeBoothModal(returnToFavorites = true) {
+  const returnState = favoriteDetailReturnState;
+  favoriteDetailReturnState = null;
   document.getElementById('booth-modal').classList.add('hidden');
   activeModalBoothId = null;
+  if (returnToFavorites && returnState) {
+    openStampModal();
+    document.getElementById('stamp-modal-content').scrollTop = returnState.scrollTop;
+    document.querySelector(`#stamp-list-container [data-favorite-id="${returnState.boothId}"] [data-favorite-detail]`)?.focus({preventScroll: true});
+  }
 }
 
 function openStampModal() {
+  closeBoothModal(false);
   renderStampModalList();
   document.getElementById('stamp-modal').classList.remove('hidden');
 }
@@ -1452,7 +1468,7 @@ function renderStampModalList() {
   container.innerHTML = favBooths.map(b => {
     const badgeCls = getCategoryBadgeClass(b.category);
     return `
-      <div class="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div data-favorite-id="${b.id}" class="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div class="min-w-0 flex-1">
           <div class="flex flex-wrap items-center gap-x-1.5 gap-y-1 mb-1">
             <span class="px-2 py-0.5 rounded-full text-[11px] font-extrabold border ${badgeCls}">${b.code}</span>
@@ -1463,7 +1479,7 @@ function renderStampModalList() {
           <div class="mt-1 text-xs text-slate-500">📅 ${getBoothDayText(b)}</div>
         </div>
         <div class="flex flex-wrap items-center gap-1.5 shrink-0">
-          <button type="button" onclick="openFavoriteBooth('${b.id}')" class="rounded-lg bg-white border border-slate-300 px-2.5 py-1.5 text-xs font-bold text-slate-700">내용 보기</button>
+          <button type="button" data-favorite-detail onclick="openFavoriteBooth('${b.id}')" class="rounded-lg bg-white border border-slate-300 px-2.5 py-1.5 text-xs font-bold text-slate-700">내용 보기</button>
           <button type="button" onclick="showBoothOnMap('${b.id}')" class="rounded-lg bg-white border border-slate-300 px-2.5 py-1.5 text-xs font-bold text-slate-700">배치도</button>
           ${b.pdfUrl ? `<a href="${b.pdfUrl}" target="_blank" rel="noopener noreferrer" class="px-2.5 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-bold">안내서 ↗</a>` : ''}
           <button type="button" onclick="toggleFavorite('${b.id}')" class="px-2.5 py-1.5 rounded-lg bg-rose-100 text-rose-700 text-xs font-bold">삭제</button>
@@ -1604,8 +1620,12 @@ function renderBusRoutes() {
 
 
 function openFavoriteBooth(boothId) {
+  const returnState = {
+    scrollTop: document.getElementById('stamp-modal-content').scrollTop,
+    boothId
+  };
   closeStampModal();
-  openBoothModal(boothId);
+  openBoothModal(boothId, returnState);
 }
 
 function getPhysicalBoothCode(booth) {
@@ -1627,7 +1647,7 @@ function showBoothOnMap(boothId) {
   const booth = BOOTHS.find(b => b.id === boothId);
   if (!booth) return;
   closeStampModal();
-  closeBoothModal();
+  closeBoothModal(false);
   switchTab('map');
   document.getElementById('map-booth-search').value = getPhysicalBoothCode(booth);
   renderMapBoothResults();
@@ -1694,7 +1714,10 @@ window.addEventListener('DOMContentLoaded', () => {
 window.addEventListener('popstate', () => switchTab(window.location.hash.slice(1) || 'home', false));
 window.addEventListener('hashchange', () => switchTab(window.location.hash.slice(1) || 'home', false));
 window.addEventListener('keydown', event => {
-  if (event.key === 'Escape') { closeMapViewer(); closeBoothModal(); closeStampModal(); }
+  if (event.key !== 'Escape') return;
+  if (!document.getElementById('map-viewer').classList.contains('hidden')) closeMapViewer();
+  else if (!document.getElementById('booth-modal').classList.contains('hidden')) closeBoothModal();
+  else if (!document.getElementById('stamp-modal').classList.contains('hidden')) closeStampModal();
 });
 
   </script>
